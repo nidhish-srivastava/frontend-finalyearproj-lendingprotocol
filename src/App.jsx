@@ -21,6 +21,7 @@ const SolanaWalletApp = () => {
   const [airdropModalOpen, setAirdropModalOpen] = useState(false);
   const [airdropAmount, setAirdropAmount] = useState('1');
   const [isProcessingAirdrop, setIsProcessingAirdrop] = useState(false);
+  const [tresuryBalance,setTreasuryBalance] = useState(100000)
   
   // Form state
   const [amount, setAmount] = useState('');
@@ -121,6 +122,7 @@ const SolanaWalletApp = () => {
 
     setIsProcessingAirdrop(true);
     try {
+      setTreasuryBalance((prev)=>prev - airdropAmount)
       const amountLamports = parseFloat(airdropAmount) * LAMPORTS_PER_SOL;
       
       const signature = await connection.requestAirdrop(
@@ -172,7 +174,6 @@ const SolanaWalletApp = () => {
       alert('Please enter a valid receiver address');
       return;
     }
-
     const amountLamports = parseFloat(amount) * LAMPORTS_PER_SOL;
     
     try {
@@ -272,18 +273,21 @@ const SolanaWalletApp = () => {
         {/* Main Content */}
         {wallet ? (
           <div className="bg-white rounded-lg shadow-md p-6">
+            <div className='w-fit text-center'>
+              <h2  className='text-xl text-gray-800'>Treasury Balance</h2>
+            <div className='text-xl font-bold text-gray-800'>{tresuryBalance} SOL</div>
+            </div>
             {/* Wallet Info */}
             <div className="mb-6 text-center">
               <h2 className="text-2xl font-bold text-gray-800">{walletBalance.toFixed(5)} SOL</h2>
               <p className="text-gray-500 truncate mt-1">{walletAddress}</p>
-              
               {/* Airdrop Button */}
               {/* <button 
                 className="mt-4 bg-purple-500 hover:bg-purple-600 text-white px-6 py-2 rounded-md transition"
                 onClick={openAirdropModal}
-              >
+                >
                 Airdrop SOL
-              </button> */}
+                </button> */}
             </div>
             
             {/* Tabs */}
@@ -305,6 +309,18 @@ const SolanaWalletApp = () => {
                 onClick={() => setActiveTab('receive')}
               >
                 Receive
+              </button>
+              <button 
+                className={`py-2 px-4 font-medium ${activeTab === 'repay' ? 'text-blue-500 border-b-2 border-blue-500' : 'text-gray-500'}`}
+                onClick={() => setActiveTab('repay')}
+              >
+                Repay
+              </button>
+              <button 
+                className={`py-2 px-4 font-medium ${activeTab === 'borrow' ? 'text-blue-500 border-b-2 border-blue-500' : 'text-gray-500'}`}
+                onClick={() => setActiveTab('borrow')}
+              >
+                Borrow
               </button>
               <button 
                 className={`py-2 px-4 font-medium ${activeTab === 'activity' ? 'text-blue-500 border-b-2 border-blue-500' : 'text-gray-500'}`}
