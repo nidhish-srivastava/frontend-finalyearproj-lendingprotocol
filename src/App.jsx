@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Connection, PublicKey, LAMPORTS_PER_SOL, Transaction, SystemProgram } from '@solana/web3.js';
 import { ClipboardIcon, CheckIcon, ArrowDownIcon, ArrowUpIcon, Wallet } from 'lucide-react';
 import { Buffer } from 'buffer';
-import Footer from './components/Footer';
 import Dashboard from './components/Dashboard';
 window.Buffer = Buffer;
 
@@ -24,7 +23,7 @@ const SolanaWalletApp = () => {
   const [tresuryBalance,setTreasuryBalance] = useState(100000)
   
   // Form state
-  const [amount, setAmount] = useState('');
+  const [amount, setAmount] = useState(1);
   const [receiverAddress, setReceiverAddress] = useState('');
 
   // Initialize connection to local network
@@ -119,34 +118,44 @@ const SolanaWalletApp = () => {
       alert('Please enter a valid amount');
       return;
     }
-
+  
     setIsProcessingAirdrop(true);
     try {
-      setTreasuryBalance((prev)=>prev - airdropAmount)
+      setTreasuryBalance((prev) => prev - airdropAmount);
+  
+      // Get and parse borrowed amount from local storage
+      let localstorageAmount = parseFloat(localStorage.getItem('borrowedAmount')) || 0;
+  
+      // Add current airdrop amount to the previous amount
+      let newAmount = parseFloat(airdropAmount) + localstorageAmount;
+  
+      // Store updated amount back to local storage
+      localStorage.setItem('borrowedAmount', newAmount.toString());
+  
       const amountLamports = parseFloat(airdropAmount) * LAMPORTS_PER_SOL;
-      
+  
       const signature = await connection.requestAirdrop(
         new PublicKey(walletAddress),
         amountLamports
       );
-      
+  
       // Confirm transaction
       await connection.confirmTransaction(signature, 'confirmed');
-      
+  
       // Update balance
       await fetchWalletBalance(connection);
-      
+  
       // Record transaction
       setTransactions([
         {
           type: 'airdrop',
           amount: parseFloat(airdropAmount),
           signature,
-          timestamp: new Date().toLocaleTimeString()
+          timestamp: new Date().toLocaleTimeString(),
         },
-        ...transactions
+        ...transactions,
       ]);
-      
+  
       setAirdropModalOpen(false);
       alert('Airdrop successful!');
     } catch (error) {
@@ -155,6 +164,7 @@ const SolanaWalletApp = () => {
     }
     setIsProcessingAirdrop(false);
   };
+  
 
   // Send SOL to another address
   const handleSend = async (e) => {
@@ -174,7 +184,18 @@ const SolanaWalletApp = () => {
       alert('Please enter a valid receiver address');
       return;
     }
-    const amountLamports = parseFloat(amount) * LAMPORTS_PER_SOL;
+
+    let amountToSend = parseFloat(amount)
+     // Get and parse borrowed amount from local storage
+     let localstorageAmount = parseFloat(localStorage.getItem('sentAmount')) || 0;
+  
+     // Add current airdrop amount to the previous amount
+     let newAmount = parseFloat(amountToSend) + localstorageAmount;
+ 
+     // Store updated amount back to local storage
+     localStorage.setItem('sentAmount', newAmount.toString());
+     
+    const amountLamports = amountToSend * LAMPORTS_PER_SOL;
     
     try {
       // Verify the receiver address is valid
@@ -234,6 +255,54 @@ const SolanaWalletApp = () => {
   const shortenAddress = (address) => {
     return address ? `${address.substring(0, 4)}...${address.substring(address.length - 4)}` : '';
   };
+
+
+// Repay borrowed SOL to treasury
+const handleRepay = async (e) => {
+  e.preventDefault();
+
+  if (!wallet) {
+    alert('Please connect your wallet first');
+    return;
+  }
+
+  if (!amount || parseFloat(amount) <= 0) {
+    alert('Please enter a valid amount');
+    return;
+  }
+
+  const repayAmount = parseFloat(amount);
+
+  let localstorageAmount = parseFloat(localStorage.getItem('borrowedAmount')) || 0;
+  
+  // Add current airdrop amount to the previous amount
+  let newAmount = localstorageAmount - repayAmount;
+
+  // Store updated amount back to local storage
+  localStorage.setItem('borrowedAmount', newAmount.toString());
+
+  if (repayAmount > walletBalance) {
+    alert('Insufficient balance to repay.');
+    return;
+  }
+
+  // Simulate repayment by decreasing wallet balance
+  setWalletBalance((prev) => prev - repayAmount);
+  setTreasuryBalance((prev) => prev + repayAmount);
+
+  setTransactions([
+    {
+      type: 'repay',
+      amount: repayAmount,
+      timestamp: new Date().toLocaleTimeString(),
+    },
+    ...transactions,
+  ]);
+
+  setAmount('');
+  alert('Repay successful!');
+};
+
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -376,13 +445,7 @@ const SolanaWalletApp = () => {
             {/* Receive Tab */}
             {activeTab === 'receive' && (
               <div className="text-center">
-                  <button 
-                className="mt-4 bg-purple-500 hover:bg-purple-600 text-white px-6 py-2 rounded-md transition"
-                onClick={openAirdropModal}
-              >
-                Receive SOL from Treasury
-              </button>
-                {/* <div className="mb-6">
+                <div className="mb-6">
                   <h3 className="font-medium text-gray-700 mb-2">Your Wallet Address</h3>
                   <div className="bg-gray-100 p-4 rounded-md break-all">{walletAddress}</div>
                 </div>
@@ -395,7 +458,7 @@ const SolanaWalletApp = () => {
                 >
                   {copied ? <CheckIcon size={18} /> : <ClipboardIcon size={18} />}
                   <span>{copied ? 'Copied!' : 'Copy Address'}</span>
-                </button> */}
+                </button>
               </div>
             )}
             
@@ -436,6 +499,53 @@ const SolanaWalletApp = () => {
                 )}
               </div>
             )}
+
+            {/* Repay Tab */}
+            {activeTab === 'repay' && (
+  <form onSubmit={handleRepay}>
+    {/* Display Borrowed Amount */}
+    <div className="mb-4 p-3 bg-gray-100 rounded-md text-gray-700">
+      <p>
+        <strong>Borrowed Amount:</strong>{' '}
+        {parseFloat(localStorage.getItem('borrowedAmount')) || 0} SOL
+      </p>
+    </div>
+
+    <div className="mb-4">
+      <label className="block text-gray-700 mb-2">Amount to Repay (SOL)</label>
+      <input
+        type="number"
+        min="0.000001"
+        step="0.000001"
+        value={amount}
+        onChange={(e) => setAmount(e.target.value)}
+        className="w-full p-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+        placeholder="Enter amount to repay"
+        required
+      />
+    </div>
+
+    <button
+      type="submit"
+      className="w-full bg-green-500 text-white py-3 rounded-md hover:bg-green-600 transition flex items-center justify-center space-x-2"
+    >
+      <ArrowDownIcon size={18} />
+      <span>Repay SOL</span>
+    </button>
+  </form>
+)}
+
+
+{/* Borrow Tab */}
+{activeTab === 'borrow' && (
+    <button
+      type="submit"
+      className="bg-blue-500 text-white px-6 py-2 rounded-md hover:bg-blue-600 transition flex items-center justify-center space-x-2 mx-auto"
+      onClick={openAirdropModal}
+      >
+      <span>Borrow SOL</span>
+    </button>
+)}
           </div>
         ) : (
           <div className="bg-white rounded-lg shadow-md p-8 text-center">
